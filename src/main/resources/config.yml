@@ -1,5 +1,10 @@
 worlds:
   - spawn
+deluxehub:
+  enabled: true
+  material: DIAMOND_SWORD
+  slot: 4
+  display-name: '&#FF0034P&#FF0067vP &8▸ &fClic para usar'
 sword:
   material: NETHERITE_SWORD
   name: '&#FF5555&l⚔ PvP &8» &eClic derecho para activar'

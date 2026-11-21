@@ -21,3 +21,12 @@ Compila con GitHub Actions (`.github/workflows/build.yml`), descarga el artifact
 - Si tu lobby usa un plugin que repone o bloquea la espada existente, desactiva esa restricción solo para el ítem de BastionMCLobbyPvP.
 - Evita poner armadura valiosa real en el lobby; realiza copia de seguridad antes de instalar.
 - Colores `&` y `&#RRGGBB` para nombre, lore y mensajes; permite degradados construidos carácter por carácter.
+
+## Integración con DeluxeHub (1.0.1)
+- En DeluxeHub el item Pvp es DIAMOND_SWORD en slot 4 y conserva el nombre original con HEX.
+- En DeluxeHub `custom_join_items.items.Pvp.actions: []` para que DeluxeHub no abra su GUI.
+- `world_settings.disable_player_pvp: false` para que BastionMCLobbyPvP permita daño solo entre jugadores activos.
+- La sección `deluxehub` en la config del plugin valida material, slot activo y nombre formateado exacto.
+- No se entrega segunda espada ni se requiere el PDC del item, pues DeluxeHub lo crea.
+- Si se cambia el nombre de la espada en DeluxeHub, actualizar `deluxehub.display-name` al mismo valor.
+- **Prueba en copia:** dos jugadores sin OP, cambio de casilla, muerte protegida, y otros plugins de PvP/WorldGuard que puedan cancelar daño.

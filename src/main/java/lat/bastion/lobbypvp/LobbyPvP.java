@@ -93,6 +93,19 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
     private boolean pvpSword(ItemStack item) {
         return item != null && item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer().has(swordKey, PersistentDataType.BYTE);
     }
+    // Reconocer la espada de DeluxeHub sin depender de un PDC que DeluxeHub no añade.
+    // Material, slot y nombre formateado deben coincidir para evitar falsos positivos.
+    private boolean deluxeHubSword(Player p, ItemStack item) {
+        if (!getConfig().getBoolean("deluxehub.enabled", true) || item == null || item.getType().isAir() || !item.hasItemMeta()) return false;
+        Material material = Material.matchMaterial(getConfig().getString("deluxehub.material", "DIAMOND_SWORD"));
+        if (material == null || item.getType() != material) return false;
+        if (p.getInventory().getHeldItemSlot() != getConfig().getInt("deluxehub.slot", 4)) return false;
+        String expected = color(getConfig().getString("deluxehub.display-name", ""));
+        return !expected.isEmpty() && item.getItemMeta().hasDisplayName() && expected.equals(item.getItemMeta().getDisplayName());
+    }
+    private boolean activationSword(Player p, ItemStack item) {
+        return pvpSword(item) || deluxeHubSword(p, item);
+    }
     private ItemStack newSword() {
         Material mat = Material.matchMaterial(getConfig().getString("sword.material", "NETHERITE_SWORD"));
         ItemStack item = new ItemStack(mat == null ? Material.NETHERITE_SWORD : mat);
@@ -158,7 +171,7 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
     }
 
     @EventHandler(ignoreCancelled = false) public void rightClick(PlayerInteractEvent e) {
-        if (e.getHand() != EquipmentSlot.HAND || !pvpSword(e.getItem())) return;
+        if (e.getHand() != EquipmentSlot.HAND || !activationSword(e.getPlayer(), e.getItem())) return;
         if (e.getAction() != Action.RIGHT_CLICK_AIR && e.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         e.setCancelled(true);
         Player p = e.getPlayer();
@@ -170,11 +183,11 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         if (active.contains(e.getPlayer().getUniqueId())) deactivate(e.getPlayer(), true);
     }
     @EventHandler public void swap(PlayerSwapHandItemsEvent e) {
-        if (pvpSword(e.getMainHandItem()) || pvpSword(e.getOffHandItem())) e.setCancelled(true);
+        if (pvpSword(e.getMainHandItem()) || pvpSword(e.getOffHandItem()) || deluxeHubSword(e.getPlayer(), e.getMainHandItem())) e.setCancelled(true);
         if (active.contains(e.getPlayer().getUniqueId())) e.setCancelled(true);
     }
     @EventHandler public void drop(PlayerDropItemEvent e) {
-        if (pvpSword(e.getItemDrop().getItemStack())) e.setCancelled(true);
+        if (pvpSword(e.getItemDrop().getItemStack()) || deluxeHubSword(e.getPlayer(), e.getItemDrop().getItemStack())) e.setCancelled(true);
         if (active.contains(e.getPlayer().getUniqueId())) e.setCancelled(true);
     }
     @EventHandler public void inventory(InventoryClickEvent e) {
