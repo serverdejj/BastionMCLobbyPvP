@@ -1,0 +1,15 @@
+name: BastionMCLobbyPvP
+version: 1.0.0
+main: lat.bastion.lobbypvp.LobbyPvP
+api-version: '1.21.11'
+author: BASTION MC
+description: PvP temporal en el lobby con armadura Netherite
+commands:
+  lobbypvp:
+    description: Gestionar espada de PvP del lobby
+    usage: /lobbypvp <give|reload|off>
+permissions:
+  bastionlobbypvp.admin:
+    default: op
+  bastionlobbypvp.use:
+    default: true
