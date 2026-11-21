@@ -1,5 +1,5 @@
 worlds:
-  - spawn
+  - void
 deluxehub:
   enabled: true
   material: DIAMOND_SWORD
@@ -16,6 +16,12 @@ sword:
   give-on-join: false
   give-on-world-enter: false
   unbreakable: true
+countdown:
+  seconds: 5
+  title: '&c&lDesactivando PVP'
+  subtitle: '&e%seconds%'
+  finished-title: '&a&lPVP DESACTIVADO'
+  finished-subtitle: '&7Tus objetos han regresado'
 armor:
   helmet: NETHERITE_HELMET
   chestplate: NETHERITE_CHESTPLATE
@@ -36,4 +42,5 @@ messages:
   no-room: '&cLa casilla de la espada está ocupada. Desocúpala primero.'
   reloaded: '&aConfiguración recargada.'
   usage: '&e/lobbypvp give <jugador> &7| &e/lobbypvp reload &7| &e/lobbypvp off'
+  backup-failed: "&cNo se pudo guardar tu inventario. PvP no activado por seguridad."
   recovered: '&eSe restauró tu armadura anterior tras una desconexión inesperada.'

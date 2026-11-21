@@ -1,5 +1,5 @@
 name: BastionMCLobbyPvP
-version: 1.0.0
+version: 1.0.2
 main: lat.bastion.lobbypvp.LobbyPvP
 api-version: '1.21.11'
 author: BASTION MC

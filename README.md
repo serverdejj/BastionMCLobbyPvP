@@ -30,3 +30,12 @@ Compila con GitHub Actions (`.github/workflows/build.yml`), descarga el artifact
 - No se entrega segunda espada ni se requiere el PDC del item, pues DeluxeHub lo crea.
 - Si se cambia el nombre de la espada en DeluxeHub, actualizar `deluxehub.display-name` al mismo valor.
 - **Prueba en copia:** dos jugadores sin OP, cambio de casilla, muerte protegida, y otros plugins de PvP/WorldGuard que puedan cancelar daño.
+
+
+## Actualización 1.0.2
+- Mundo predeterminado: `void` (el lobby configurado en BASTION MC).
+- Espada DeluxeHub irrompible mientras está en uso y cuando se reconoce al entrar.
+- Al activar, guarda en `armor-backups.yml` el inventario completo, mano secundaria y armadura, luego oculta los objetos y deja únicamente la espada. Restaura todo al desactivar, desconectar o reiniciar. **No borres `armor-backups.yml`**.
+- Al cambiar de slot o hacer clic derecho otra vez comienza una cuenta de 5 segundos; permanece vulnerable al PvP durante la cuenta. TITLE rojo y número amarillo son configurables.
+- No actualizar este plugin mediante `/reload` global de Bukkit. Prueba en servidor de staging con inventario de prueba.
+- No cambies `disable_player_pvp: false` de DeluxeHub sin el plugin de protección activo.

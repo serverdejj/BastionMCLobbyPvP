@@ -36,6 +36,7 @@ import java.util.regex.Pattern;
 public final class LobbyPvP extends JavaPlugin implements Listener {
     private final Set<UUID> active = new HashSet<>();
     private NamespacedKey swordKey;
+    private final Map<UUID, org.bukkit.scheduler.BukkitTask> disableTimers = new HashMap<>();
     private File snapshotsFile;
     private YamlConfiguration snapshots;
     private static final Pattern HEX = Pattern.compile("&#([a-fA-F0-9]{6})");
@@ -48,7 +49,8 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         Objects.requireNonNull(getCommand("lobbypvp")).setExecutor((sender, command, label, args) -> {
             if (args.length == 1 && args[0].equalsIgnoreCase("off") && sender instanceof Player player) {
-                deactivate(player, true); return true;
+                if (active.contains(player.getUniqueId())) startCountdown(player);
+                return true;
             }
             if (!sender.hasPermission("bastionlobbypvp.admin")) { sender.sendMessage(message("no-permission")); return true; }
             if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
@@ -69,10 +71,12 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
             if (args.length == 2 && args[0].equalsIgnoreCase("give") && sender.hasPermission("bastionlobbypvp.admin")) return Bukkit.getOnlinePlayers().stream().map(Player::getName).filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();
             return List.of();
         });
-        for (Player p : Bukkit.getOnlinePlayers()) recover(p);
+        for (Player p : Bukkit.getOnlinePlayers()) { recover(p); makeDeluxeSwordUnbreakable(p); }
     }
 
     @Override public void onDisable() {
+        for (org.bukkit.scheduler.BukkitTask task : disableTimers.values()) task.cancel();
+        disableTimers.clear();
         for (Player p : Bukkit.getOnlinePlayers()) deactivate(p, false);
         storeSnapshots();
     }
@@ -124,19 +128,41 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         if (existing != null && !existing.getType().isAir()) return false;
         p.getInventory().setItem(slot, newSword()); return true;
     }
-    private void storeSnapshots() {
-        try { snapshots.save(snapshotsFile); } catch (IOException ex) { getLogger().severe("No se pudo guardar armor-backups.yml: " + ex.getMessage()); }
+    private boolean storeSnapshots() {
+        try { snapshots.save(snapshotsFile); return true; }
+        catch (IOException ex) { getLogger().severe("No se pudo guardar armor-backups.yml: " + ex.getMessage()); return false; }
     }
-    private void snapshot(Player p) {
+    // Guardar TODO antes de vaciar el inventario. Persistente incluso si el servidor se cierra inesperadamente.
+    private boolean snapshot(Player p) {
         String key = p.getUniqueId().toString();
-        ItemStack[] armor = p.getInventory().getArmorContents();
-        for (int i=0;i<4;i++) snapshots.set(key + ".slot" + i, armor[i]);
+        PlayerInventory inv = p.getInventory();
+        for (int i = 0; i < 4; i++) snapshots.set(key + ".slot" + i, inv.getArmorContents()[i]);
+        ItemStack[] storage = inv.getStorageContents();
+        // La espada DeluxeHub debe continuar siendo irrompible cuando se restaura el inventario.
+        int swordSlot = Math.max(0, Math.min(8, getConfig().getInt("deluxehub.slot", 4)));
+        if (swordSlot < storage.length && deluxeHubSword(p, storage[swordSlot])) {
+            storage[swordSlot] = unbreakableCopy(storage[swordSlot]);
+        }
+        for (int i = 0; i < storage.length; i++) snapshots.set(key + ".inventory." + i, storage[i]);
+        snapshots.set(key + ".inventory-size", storage.length);
+        snapshots.set(key + ".offhand", inv.getItemInOffHand());
+        snapshots.set(key + ".full", true);
         snapshots.set(key + ".stored", true);
-        storeSnapshots();
+        if (storeSnapshots()) return true;
+        snapshots.set(key, null);
+        return false;
     }
     private void restore(Player p) {
         String key = p.getUniqueId().toString();
         if (!snapshots.getBoolean(key + ".stored")) return;
+        if (snapshots.getBoolean(key + ".full")) {
+            int len = Math.min(p.getInventory().getStorageContents().length, snapshots.getInt(key + ".inventory-size", 36));
+            ItemStack[] storage = new ItemStack[p.getInventory().getStorageContents().length];
+            for (int i = 0; i < len; i++) storage[i] = snapshots.getItemStack(key + ".inventory." + i);
+            p.getInventory().setStorageContents(storage);
+            ItemStack offhand = snapshots.getItemStack(key + ".offhand");
+            p.getInventory().setItemInOffHand(offhand);
+        }
         ItemStack[] armor = new ItemStack[4];
         for (int i=0;i<4;i++) armor[i] = snapshots.getItemStack(key + ".slot" + i);
         p.getInventory().setArmorContents(armor);
@@ -148,6 +174,19 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
             restore(p); p.sendMessage(message("recovered"));
         }
     }
+    private ItemStack unbreakableCopy(ItemStack original) {
+        if (original == null || original.getType().isAir()) return original;
+        ItemStack copy = original.clone();
+        ItemMeta meta = copy.getItemMeta();
+        if (meta != null) { meta.setUnbreakable(true); copy.setItemMeta(meta); }
+        return copy;
+    }
+    private void makeDeluxeSwordUnbreakable(Player p) {
+        if (!allowed(p) || !getConfig().getBoolean("sword.unbreakable", true)) return;
+        int slot = Math.max(0, Math.min(8, getConfig().getInt("deluxehub.slot", 4)));
+        ItemStack item = p.getInventory().getItem(slot);
+        if (deluxeHubSword(p, item)) p.getInventory().setItem(slot, unbreakableCopy(item));
+    }
     private ItemStack armorPiece(String configPath, Material fallback) {
         Material mat = Material.matchMaterial(getConfig().getString("armor." + configPath, fallback.name()));
         ItemStack item = new ItemStack(mat == null ? fallback : mat);
@@ -157,19 +196,52 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
     }
     private void activate(Player p) {
         if (active.contains(p.getUniqueId()) || !allowed(p) || !p.hasPermission("bastionlobbypvp.use")) return;
-        snapshot(p);
+        if (!snapshot(p)) { p.sendMessage(message("backup-failed")); return; }
+        ItemStack sword = p.getInventory().getItemInMainHand().clone();
+        if (getConfig().getBoolean("sword.unbreakable", true)) sword = unbreakableCopy(sword);
+        p.getInventory().setStorageContents(new ItemStack[p.getInventory().getStorageContents().length]);
+        p.getInventory().setItemInOffHand(null);
+        p.getInventory().setItem(p.getInventory().getHeldItemSlot(), sword);
         p.getInventory().setArmorContents(new ItemStack[]{
             armorPiece("boots", Material.NETHERITE_BOOTS), armorPiece("leggings", Material.NETHERITE_LEGGINGS),
             armorPiece("chestplate", Material.NETHERITE_CHESTPLATE), armorPiece("helmet", Material.NETHERITE_HELMET)
         });
         active.add(p.getUniqueId()); p.sendMessage(message("enabled"));
     }
-    private void deactivate(Player p, boolean announce) {
-        boolean wasActive = active.remove(p.getUniqueId());
-        if (wasActive) restore(p);
-        if (wasActive && announce) p.sendMessage(message("disabled"));
+    private void cancelCountdown(Player p) {
+        org.bukkit.scheduler.BukkitTask task = disableTimers.remove(p.getUniqueId());
+        if (task != null) task.cancel();
     }
-
+    private void deactivate(Player p, boolean announce) {
+        cancelCountdown(p);
+        boolean wasActive = active.remove(p.getUniqueId());
+        if (wasActive || snapshots.getBoolean(p.getUniqueId() + ".stored")) restore(p);
+        if (wasActive && announce) {
+            p.sendTitle(color(getConfig().getString("countdown.finished-title", "&aPvP DESACTIVADO")),
+                color(getConfig().getString("countdown.finished-subtitle", "&7Objetos restaurados")), 0, 25, 10);
+            p.sendMessage(message("disabled"));
+        }
+    }
+    private void startCountdown(Player p) {
+        UUID id = p.getUniqueId();
+        if (!active.contains(id) || disableTimers.containsKey(id)) return;
+        int seconds = Math.max(1, Math.min(60, getConfig().getInt("countdown.seconds", 5)));
+        // El jugador continúa en PvP durante la cuenta regresiva.
+        final int[] remaining = { seconds };
+        showCountdown(p, remaining[0]);
+        org.bukkit.scheduler.BukkitTask task = Bukkit.getScheduler().runTaskTimer(this, () -> {
+            if (!p.isOnline() || !active.contains(id) || !allowed(p)) { deactivate(p, false); return; }
+            remaining[0]--;
+            if (remaining[0] <= 0) { deactivate(p, true); return; }
+            showCountdown(p, remaining[0]);
+        }, 20L, 20L);
+        disableTimers.put(id, task);
+    }
+    private void showCountdown(Player p, int remaining) {
+        p.sendTitle(color(getConfig().getString("countdown.title", "&c&lDesactivando PVP")),
+            color(getConfig().getString("countdown.subtitle", "&e%seconds%").replace("%seconds%", String.valueOf(remaining))),
+            0, 25, 0);
+    }
     @EventHandler(ignoreCancelled = false) public void rightClick(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND || !activationSword(e.getPlayer(), e.getItem())) return;
         if (e.getAction() != Action.RIGHT_CLICK_AIR && e.getAction() != Action.RIGHT_CLICK_BLOCK) return;
@@ -177,10 +249,15 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         Player p = e.getPlayer();
         if (!allowed(p)) { p.sendMessage(message("only-world")); return; }
         if (!p.hasPermission("bastionlobbypvp.use")) { p.sendMessage(message("no-permission")); return; }
-        if (active.contains(p.getUniqueId())) deactivate(p, true); else activate(p);
+        if (active.contains(p.getUniqueId())) startCountdown(p); else activate(p);
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void held(PlayerItemHeldEvent e) {
-        if (active.contains(e.getPlayer().getUniqueId())) deactivate(e.getPlayer(), true);
+        if (e.getPreviousSlot() != e.getNewSlot() && active.contains(e.getPlayer().getUniqueId())) {
+            startCountdown(e.getPlayer());
+        }
+    }
+    @EventHandler public void swordWear(org.bukkit.event.player.PlayerItemDamageEvent e) {
+        if (activationSword(e.getPlayer(), e.getItem())) e.setCancelled(true);
     }
     @EventHandler public void swap(PlayerSwapHandItemsEvent e) {
         if (pvpSword(e.getMainHandItem()) || pvpSword(e.getOffHandItem()) || deluxeHubSword(e.getPlayer(), e.getMainHandItem())) e.setCancelled(true);
@@ -206,11 +283,13 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
             if (!p.isOnline()) return;
             recover(p);
             if (allowed(p) && getConfig().getBoolean("sword.give-on-join", false)) giveSword(p);
+            Bukkit.getScheduler().runTaskLater(this, () -> { if (p.isOnline()) makeDeluxeSwordUnbreakable(p); }, 20L);
         });
     }
     @EventHandler public void world(PlayerChangedWorldEvent e) {
         deactivate(e.getPlayer(), false);
         if (allowed(e.getPlayer()) && getConfig().getBoolean("sword.give-on-world-enter", false)) giveSword(e.getPlayer());
+        Bukkit.getScheduler().runTaskLater(this, () -> { if (e.getPlayer().isOnline()) makeDeluxeSwordUnbreakable(e.getPlayer()); }, 2L);
     }
     @EventHandler public void gameMode(PlayerGameModeChangeEvent e) { deactivate(e.getPlayer(), false); }
     @EventHandler(priority = EventPriority.HIGHEST) public void pvp(EntityDamageByEntityEvent e) {
