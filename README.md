@@ -46,3 +46,12 @@ Compila con GitHub Actions (`.github/workflows/build.yml`), descarga el artifact
 - Si cambias de slot, mundo, modo de juego, te desconectas o dejas de sostener la espada, la activación se cancela.
 - El contador de desactivación de 5 segundos se mantiene.
 - La sección nueva `activation-countdown` en `config.yml` es configurable; **agrégala manualmente** al archivo existente en Holy Hosting (los archivos existentes no se sobrescriben automáticamente).
+
+## Actualización 1.0.4: spawn de derrotas y curación
+- `/pvp setspawn` (requiere OP o `bastionlobbypvp.admin`) guarda el punto exacto y la orientación del spawn del PvP en `plugins/BastionMCLobbyPvP/pvp-spawn.yml`. También se puede usar `/lobbypvp setspawn`.
+- Si un jugador con PvP activo recibe daño mortal y `combat.prevent-player-death: true`, se cancela la muerte real, se desactiva el PvP, se restauran sus objetos, se le cura y se lo teletransporta al punto establecido. Se intenta desmontar primero cualquier pasajero (como el nametag).
+- Si no configuraste el punto con `/pvp setspawn`, se utiliza el spawn del mundo donde está el jugador (recomendado: configurar un punto seguro explícito con `/pvp setspawn` para el mundo `void`).
+- Si ocurre una muerte real mientras el PvP está activo, se preserva el inventario y se ajusta el siguiente respawn.
+- Al terminar la cuenta de desactivación de 5 segundos (por cambiar slot o `/pvp off`) también se restaura la vida máxima. No se aplica esta curación en desconexiones, cambios de mundo ni recargas administrativas.
+- Opciones nuevas en `config.yml`: `combat.return-to-spawn-on-defeat`, `combat.heal-on-disable`, `combat.defeat-title` y `combat.defeat-subtitle`, además de textos en `messages.spawn-set`, `messages.spawn-save-failed`, `messages.spawn-teleport-failed`, `messages.defeated`.
+- Conserva `armor-backups.yml`. Realiza copia de seguridad del lobby y prueba primero con inventarios de prueba y dos jugadores sin OP. Este código requiere compilación y pruebas en Purpur 1.21.11.

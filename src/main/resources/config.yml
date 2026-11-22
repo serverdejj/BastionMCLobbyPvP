@@ -36,6 +36,10 @@ combat:
   damage-multiplier: 1.0
   prevent-player-death: true
   stop-pvp-when-dying: true
+  return-to-spawn-on-defeat: true
+  heal-on-disable: true
+  defeat-title: '&#FF5555&lHAS SIDO DERROTADO'
+  defeat-subtitle: '&eRegresaste al spawn del PvP' 
 messages:
   prefix: '&#FFD15B&lBASTION MC &8» &r'
   enabled: '&a¡Modo PvP activado! &7Tu armadura Netherite está equipada.'
@@ -45,6 +49,10 @@ messages:
   given: '&aEspada PvP entregada a &f%player%&a.'
   no-room: '&cLa casilla de la espada está ocupada. Desocúpala primero.'
   reloaded: '&aConfiguración recargada.'
-  usage: '&e/lobbypvp give <jugador> &7| &e/lobbypvp reload &7| &e/lobbypvp off'
+  usage: '&e/pvp setspawn &7| &e/pvp off &7| &e/lobbypvp give <jugador> &7| &e/lobbypvp reload'
   backup-failed: "&cNo se pudo guardar tu inventario. PvP no activado por seguridad."
+  spawn-set: '&aSpawn del PvP establecido correctamente.'
+  spawn-save-failed: '&cError al guardar el spawn. Revisa la consola.'
+  spawn-teleport-failed: '&cNo se pudo teletransportar al spawn del PvP.'
+  defeated: '&eHas regresado al spawn con toda tu vida.'
   recovered: '&eSe restauró tu armadura anterior tras una desconexión inesperada.'
