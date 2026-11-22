@@ -39,3 +39,10 @@ Compila con GitHub Actions (`.github/workflows/build.yml`), descarga el artifact
 - Al cambiar de slot o hacer clic derecho otra vez comienza una cuenta de 5 segundos; permanece vulnerable al PvP durante la cuenta. TITLE rojo y número amarillo son configurables.
 - No actualizar este plugin mediante `/reload` global de Bukkit. Prueba en servidor de staging con inventario de prueba.
 - No cambies `disable_player_pvp: false` de DeluxeHub sin el plugin de protección activo.
+
+## Actualización 1.0.3: TITLE de activación
+- Al hacer clic derecho en la espada válida comienza un contador TITLE **Activando PVP** verde claro con **3, 2, 1** amarillo.
+- El modo PvP y la armadura temporal solo se activan al finalizar los 3 segundos; se evita alterar el inventario durante la cuenta.
+- Si cambias de slot, mundo, modo de juego, te desconectas o dejas de sostener la espada, la activación se cancela.
+- El contador de desactivación de 5 segundos se mantiene.
+- La sección nueva `activation-countdown` en `config.yml` es configurable; **agrégala manualmente** al archivo existente en Holy Hosting (los archivos existentes no se sobrescriben automáticamente).

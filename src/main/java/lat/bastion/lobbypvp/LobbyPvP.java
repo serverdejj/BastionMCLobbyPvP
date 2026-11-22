@@ -37,6 +37,7 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
     private final Set<UUID> active = new HashSet<>();
     private NamespacedKey swordKey;
     private final Map<UUID, org.bukkit.scheduler.BukkitTask> disableTimers = new HashMap<>();
+    private final Map<UUID, org.bukkit.scheduler.BukkitTask> activationTimers = new HashMap<>();
     private File snapshotsFile;
     private YamlConfiguration snapshots;
     private static final Pattern HEX = Pattern.compile("&#([a-fA-F0-9]{6})");
@@ -54,7 +55,7 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
             }
             if (!sender.hasPermission("bastionlobbypvp.admin")) { sender.sendMessage(message("no-permission")); return true; }
             if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
-                for (Player p : Bukkit.getOnlinePlayers()) deactivate(p, false);
+                for (Player p : Bukkit.getOnlinePlayers()) { cancelActivation(p, true); deactivate(p, false); }
                 reloadConfig(); sender.sendMessage(message("reloaded")); return true;
             }
             if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
@@ -75,6 +76,8 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
     }
 
     @Override public void onDisable() {
+        for (org.bukkit.scheduler.BukkitTask task : activationTimers.values()) task.cancel();
+        activationTimers.clear();
         for (org.bukkit.scheduler.BukkitTask task : disableTimers.values()) task.cancel();
         disableTimers.clear();
         for (Player p : Bukkit.getOnlinePlayers()) deactivate(p, false);
@@ -194,6 +197,41 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         if (protection > 0) item.addUnsafeEnchantment(Enchantment.PROTECTION, protection);
         return item;
     }
+    // Cuenta previa: el PvP NO se activa ni reemplaza el inventario hasta terminar los 3 segundos.
+    private void startActivation(Player p) {
+        UUID id = p.getUniqueId();
+        if (active.contains(id) || activationTimers.containsKey(id)) return;
+        int seconds = Math.max(1, Math.min(30, getConfig().getInt("activation-countdown.seconds", 3)));
+        final int[] remaining = {seconds};
+        showActivation(p, remaining[0]);
+        org.bukkit.scheduler.BukkitTask task = Bukkit.getScheduler().runTaskTimer(this, () -> {
+            if (!p.isOnline() || !allowed(p) || !p.hasPermission("bastionlobbypvp.use")
+                    || !activationSword(p, p.getInventory().getItemInMainHand())) {
+                cancelActivation(p, true);
+                return;
+            }
+            remaining[0]--;
+            if (remaining[0] <= 0) {
+                cancelActivation(p, false);
+                activate(p);
+                return;
+            }
+            showActivation(p, remaining[0]);
+        }, 20L, 20L);
+        activationTimers.put(id, task);
+    }
+    private void showActivation(Player p, int remaining) {
+        p.sendTitle(color(getConfig().getString("activation-countdown.title", "&a&lActivando PVP")),
+            color(getConfig().getString("activation-countdown.subtitle", "&e%seconds%").replace("%seconds%", String.valueOf(remaining))),
+            0, 25, 0);
+    }
+    private void cancelActivation(Player p, boolean clearTitle) {
+        org.bukkit.scheduler.BukkitTask task = activationTimers.remove(p.getUniqueId());
+        if (task != null) {
+            task.cancel();
+            if (clearTitle && p.isOnline()) p.resetTitle();
+        }
+    }
     private void activate(Player p) {
         if (active.contains(p.getUniqueId()) || !allowed(p) || !p.hasPermission("bastionlobbypvp.use")) return;
         if (!snapshot(p)) { p.sendMessage(message("backup-failed")); return; }
@@ -249,11 +287,12 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         Player p = e.getPlayer();
         if (!allowed(p)) { p.sendMessage(message("only-world")); return; }
         if (!p.hasPermission("bastionlobbypvp.use")) { p.sendMessage(message("no-permission")); return; }
-        if (active.contains(p.getUniqueId())) startCountdown(p); else activate(p);
+        if (active.contains(p.getUniqueId())) startCountdown(p); else startActivation(p);
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void held(PlayerItemHeldEvent e) {
-        if (e.getPreviousSlot() != e.getNewSlot() && active.contains(e.getPlayer().getUniqueId())) {
-            startCountdown(e.getPlayer());
+        if (e.getPreviousSlot() != e.getNewSlot()) {
+            cancelActivation(e.getPlayer(), true);
+            if (active.contains(e.getPlayer().getUniqueId())) startCountdown(e.getPlayer());
         }
     }
     @EventHandler public void swordWear(org.bukkit.event.player.PlayerItemDamageEvent e) {
@@ -276,7 +315,7 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         if (!(e.getWhoClicked() instanceof Player p)) return;
         if (active.contains(p.getUniqueId()) || pvpSword(e.getOldCursor())) e.setCancelled(true);
     }
-    @EventHandler public void quit(PlayerQuitEvent e) { deactivate(e.getPlayer(), false); }
+    @EventHandler public void quit(PlayerQuitEvent e) { cancelActivation(e.getPlayer(), false); deactivate(e.getPlayer(), false); }
     @EventHandler public void join(PlayerJoinEvent e) {
         Player p = e.getPlayer();
         Bukkit.getScheduler().runTask(this, () -> {
@@ -287,11 +326,12 @@ public final class LobbyPvP extends JavaPlugin implements Listener {
         });
     }
     @EventHandler public void world(PlayerChangedWorldEvent e) {
+        cancelActivation(e.getPlayer(), true);
         deactivate(e.getPlayer(), false);
         if (allowed(e.getPlayer()) && getConfig().getBoolean("sword.give-on-world-enter", false)) giveSword(e.getPlayer());
         Bukkit.getScheduler().runTaskLater(this, () -> { if (e.getPlayer().isOnline()) makeDeluxeSwordUnbreakable(e.getPlayer()); }, 2L);
     }
-    @EventHandler public void gameMode(PlayerGameModeChangeEvent e) { deactivate(e.getPlayer(), false); }
+    @EventHandler public void gameMode(PlayerGameModeChangeEvent e) { cancelActivation(e.getPlayer(), true); deactivate(e.getPlayer(), false); }
     @EventHandler(priority = EventPriority.HIGHEST) public void pvp(EntityDamageByEntityEvent e) {
         if (!(e.getEntity() instanceof Player victim) || !allowed(victim)) return;
         Player attacker = null;

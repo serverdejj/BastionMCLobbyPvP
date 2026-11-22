@@ -16,6 +16,10 @@ sword:
   give-on-join: false
   give-on-world-enter: false
   unbreakable: true
+activation-countdown:
+  seconds: 3
+  title: "&#76FF7A&lActivando PVP"
+  subtitle: "&e%seconds%"
 countdown:
   seconds: 5
   title: '&c&lDesactivando PVP'
